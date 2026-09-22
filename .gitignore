@@ -18,7 +18,6 @@ htmlcov/
 
 # Local runtime data and generated outputs
 
-!database/.gitkeep
 logs/*
 !logs/.gitkeep
 
@@ -30,7 +29,7 @@ logs/*
 *.key
 
 # SQLite and log files created outside the project folders
-*.db
+
 *.sqlite
 *.sqlite3
 *.log
