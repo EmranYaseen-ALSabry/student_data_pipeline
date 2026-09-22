@@ -1,0 +1,41 @@
+# Python virtual environments
+.venv/
+venv/
+env/
+.env/
+
+# Python cache and test artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# IDE settings
+.idea/
+.vscode/
+
+# Local runtime data and generated outputs
+database/*
+!database/.gitkeep
+logs/*
+!logs/.gitkeep
+data/processed/*
+data/rejected/*
+
+# Local secrets and environment configuration
+.env
+*.env
+*.secret
+*.key
+
+# SQLite and log files created outside the project folders
+*.db
+*.sqlite
+*.sqlite3
+*.log
+
+# OS metadata
+.DS_Store
+Thumbs.db
