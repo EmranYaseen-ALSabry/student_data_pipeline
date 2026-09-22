@@ -1,0 +1,7 @@
+student_id,name,age,city,email,major,enrollment_year,gpa,total_credits,attendance_rate,performance_level,attendance_status,error_reason
+105,Yousef Hassan,22,Dubai,yousef.hassan@example.com,Artificial Intelligence,2023,4.8,50,115.0,Excellent,Regular,GPA out of bounds [0.0-4.0]: 4.8; Attendance rate out of bounds [0-100]: 115.0
+109,Kareem Adel,20,Jeddah,kareem.adel@example.com,Cybersecurity,2023,-0.5,30,82.0,Academic Probation,Needs Improvement,GPA out of bounds [0.0-4.0]: -0.5
+110,Nour Mansour,21,Cairo,nour.mansour@example.com,Information Systems,2022,3.1,80,-10.0,Very Good,Critical Warning,Attendance rate out of bounds [0-100]: -10.0
+111,Tariq Ziyad,12,Riyadh,tariq.ziyad@example.com,,,,,80.0,Not Available,Needs Improvement,Age out of bounds [16-80]: 12.0
+112,Huda Mahmoud,95,Cairo,huda.mahmoud@example.com,,,,,91.0,Not Available,Regular,Age out of bounds [16-80]: 95.0
+,Khaled Mostafa,22,Giza,khaled.m@example.com,,,,,,Not Available,Not Available,Missing student_id

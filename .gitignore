@@ -17,12 +17,11 @@ htmlcov/
 .vscode/
 
 # Local runtime data and generated outputs
-database/*
+
 !database/.gitkeep
 logs/*
 !logs/.gitkeep
-data/processed/*
-data/rejected/*
+
 
 # Local secrets and environment configuration
 .env

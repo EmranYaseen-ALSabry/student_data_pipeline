@@ -1,0 +1,8 @@
+student_id,name,age,city,email,major,enrollment_year,gpa,total_credits,attendance_rate,performance_level,attendance_status
+101,Ahmed Ali,21,Cairo,ahmed.ali@example.com,Computer Science,2022,3.85,90,92.5,Excellent,Regular
+102,Fatima Omar,22,Alexandria,fatima.omar@example.com,Data Engineering,2021,3.4,110,88.0,Very Good,Regular
+103,Mohamed Saleh,20,Riyadh,mohamed.saleh@example.com,Information Systems,2023,2.15,45,72.0,Satisfactory,Critical Warning
+104,Sara Khaled,23,New York,sara.khaled@example.com,Computer Science,2022,3.9,85,96.0,Excellent,Regular
+106,Mariam Tarek,21,Cairo,mariam.tarek@example.com,Software Engineering,2021,2.8,105,84.0,Good,Needs Improvement
+107,Ziad Hamed,19,Giza,ziad.hamed@example.com,Data Engineering,2022,3.65,75,90.0,Very Good,Regular
+108,Laila Nasser,24,Alexandria,laila.nasser@example.com,Computer Science,2020,1.75,120,65.0,Academic Probation,Critical Warning
