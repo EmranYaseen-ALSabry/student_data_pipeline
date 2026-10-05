@@ -6,19 +6,31 @@ logger = setup_logger("quality_validator")
 
 
 def validate_student_records(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """Enforces strict data quality and governance rules on integrated student records:
+    """Enforces strict data quality and governance gates on integrated student records:
 
-    Rules:
-    1. student_id: Must not be null/empty, must be a positive integer, and must be unique.
-    2. age: Must be numeric and between 16 and 80 inclusive (16 <= age <= 80).
-    3. gpa: Must be numeric and between 0.0 and 4.0 inclusive (0.0 <= gpa <= 4.0).
-    4. attendance_rate: Must be numeric and between 0.0 and 100.0 inclusive (0.0 <= rate <= 100.0).
-    5. score (if present): Must be numeric and between 0.0 and 100.0 inclusive.
+    ========================================================================
+    ARCHITECTURAL POLICY: CRITICAL FIELDS VS. OPTIONAL ADDITIONAL FIELDS
+    ========================================================================
+    1. Critical Core Fields (MANDATORY & STRICT):
+       Violations in these rules immediately isolate the candidate record into
+       the rejected dataset (`rejected_records.csv`) with explicit `error_reason`.
+       - student_id: Must not be null/empty, must be a positive integer, must be unique.
+       - age: If present, must be within academic bounds: 16 <= age <= 80.
+       - gpa: If present, must be within valid grading scale: 0.0 <= gpa <= 4.0.
+       - attendance_rate: If present, must be a valid percentage: 0.0 <= attendance_rate <= 100.0.
+       - score: If present, must be within valid bounds: 0.0 <= score <= 100.0.
+       - email: If present, must contain '@' and domain dot.
 
-    Non-compliant records are segregated with specific failure reasons stored in 'error_reason'.
+    2. Optional Additional Fields (MONGODB & EXTENDED PROFILES):
+       Absence or partial completion of these fields NEVER causes record rejection:
+       - contact.phone, contact.emergency_contact
+       - address.street, address.city, address.country
+       - guardian.name, guardian.relationship, guardian.phone
+       - skills, courses, projects
+       Missing values in these optional fields are preserved as 'N/A' or empty.
 
     Args:
-        df: Enriched student DataFrame.
+        df: Consolidated student DataFrame after transformation.
 
     Returns:
         Tuple[pd.DataFrame, pd.DataFrame]: (valid_records, rejected_records)
@@ -27,11 +39,11 @@ def validate_student_records(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFra
         logger.warning("Empty DataFrame passed to quality validator.")
         return df, pd.DataFrame()
 
-    logger.info(f"Executing data quality validation checks on {len(df)} records...")
+    logger.info(f"Executing data quality validation checks on {len(df)} candidate records...")
     df_copy = df.copy()
     reasons_list: List[str | None] = []
 
-    # Check for duplicate student_ids among non-null rows
+    # Check for duplicate student_ids among non-null candidate rows
     duplicated_ids = set()
     if "student_id" in df_copy.columns:
         valid_ids = df_copy["student_id"].dropna()
@@ -40,7 +52,9 @@ def validate_student_records(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFra
     for idx, row in df_copy.iterrows():
         errors = []
 
-        # Rule 1: student_id validation
+        # -------------------------------------------------------------
+        # Critical Rule 1: student_id validation (Must be non-null, > 0, unique)
+        # -------------------------------------------------------------
         if "student_id" not in row or pd.isna(row["student_id"]):
             errors.append("Missing student_id")
         else:
@@ -53,7 +67,9 @@ def validate_student_records(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFra
             except (ValueError, TypeError):
                 errors.append("Non-integer student_id")
 
-        # Rule 2: age validation (16 <= age <= 80)
+        # -------------------------------------------------------------
+        # Critical Rule 2: Age boundary validation (16 <= age <= 80)
+        # -------------------------------------------------------------
         if "age" in row and pd.notna(row["age"]):
             try:
                 age_val = float(row["age"])
@@ -62,7 +78,9 @@ def validate_student_records(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFra
             except (ValueError, TypeError):
                 errors.append("Non-numeric age value")
 
-        # Rule 3: GPA validation (0.0 <= gpa <= 4.0)
+        # -------------------------------------------------------------
+        # Critical Rule 3: GPA boundary validation (0.0 <= gpa <= 4.0)
+        # -------------------------------------------------------------
         if "gpa" in row and pd.notna(row["gpa"]):
             try:
                 gpa_val = float(row["gpa"])
@@ -71,7 +89,9 @@ def validate_student_records(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFra
             except (ValueError, TypeError):
                 errors.append("Non-numeric GPA value")
 
-        # Rule 4: Attendance rate validation (0.0 <= attendance_rate <= 100.0)
+        # -------------------------------------------------------------
+        # Critical Rule 4: Attendance rate boundary (0.0 <= rate <= 100.0)
+        # -------------------------------------------------------------
         if "attendance_rate" in row and pd.notna(row["attendance_rate"]):
             try:
                 att_val = float(row["attendance_rate"])
@@ -80,7 +100,9 @@ def validate_student_records(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFra
             except (ValueError, TypeError):
                 errors.append("Non-numeric attendance rate")
 
-        # Rule 5: Score validation (0.0 <= score <= 100.0) if present
+        # -------------------------------------------------------------
+        # Critical Rule 5: Score boundary validation (0.0 <= score <= 100.0)
+        # -------------------------------------------------------------
         if "score" in row and pd.notna(row["score"]):
             try:
                 score_val = float(row["score"])
@@ -89,11 +111,18 @@ def validate_student_records(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFra
             except (ValueError, TypeError):
                 errors.append("Non-numeric score")
 
-        # Rule 6: Email validation format check if present
+        # -------------------------------------------------------------
+        # Critical Rule 6: Email syntax check if present
+        # -------------------------------------------------------------
         if "email" in row and pd.notna(row["email"]):
             email_str = str(row["email"]).strip()
             if "@" not in email_str or "." not in email_str.split("@")[-1]:
                 errors.append(f"Invalid email format: '{email_str}'")
+
+        # -------------------------------------------------------------
+        # Optional MongoDB Fields: Checked for awareness, non-blocking
+        # -------------------------------------------------------------
+        # Missing contact, guardian, skills, or projects NEVER generates rejection errors.
 
         if errors:
             reasons_list.append("; ".join(errors))
@@ -102,7 +131,7 @@ def validate_student_records(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFra
 
     df_copy["error_reason"] = reasons_list
 
-    # Separate valid and rejected records
+    # Segregate valid from rejected records
     rejected_mask = df_copy["error_reason"].notna()
     rejected_records = df_copy[rejected_mask].copy()
     valid_records = df_copy[~rejected_mask].drop(columns=["error_reason"]).copy()
@@ -113,4 +142,3 @@ def validate_student_records(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFra
     )
 
     return valid_records, rejected_records
-

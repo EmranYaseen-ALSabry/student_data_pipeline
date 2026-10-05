@@ -1,7 +1,7 @@
-student_id,name,age,city,email,major,enrollment_year,gpa,total_credits,attendance_rate,performance_level,attendance_status,error_reason
-105,Yousef Hassan,22,Dubai,yousef.hassan@example.com,Artificial Intelligence,2023,4.8,50,115.0,Excellent,Regular,GPA out of bounds [0.0-4.0]: 4.8; Attendance rate out of bounds [0-100]: 115.0
-109,Kareem Adel,20,Jeddah,kareem.adel@example.com,Cybersecurity,2023,-0.5,30,82.0,Academic Probation,Needs Improvement,GPA out of bounds [0.0-4.0]: -0.5
-110,Nour Mansour,21,Cairo,nour.mansour@example.com,Information Systems,2022,3.1,80,-10.0,Very Good,Critical Warning,Attendance rate out of bounds [0-100]: -10.0
-111,Tariq Ziyad,12,Riyadh,tariq.ziyad@example.com,,,,,80.0,Not Available,Needs Improvement,Age out of bounds [16-80]: 12.0
-112,Huda Mahmoud,95,Cairo,huda.mahmoud@example.com,,,,,91.0,Not Available,Regular,Age out of bounds [16-80]: 95.0
-,Khaled Mostafa,22,Giza,khaled.m@example.com,,,,,,Not Available,Not Available,Missing student_id
+student_id,name,age,city,email,major,enrollment_year,gpa,total_credits,attendance_rate,skills,courses,projects,contact.phone,contact.emergency_contact,address.street,address.city,address.country,guardian.name,guardian.relationship,guardian.phone,performance_level,attendance_status,error_reason
+105,Yousef Hassan,22,Dubai,yousef.hassan@example.com,Artificial Intelligence,2023,4.8,50,115.0,C++ | Algorithms | Computer Vision,Deep Learning (98%),"Autonomous Object Detection [PyTorch, OpenCV]",,,Sheikh Zayed Road,Dubai,UAE,Hassan Tariq,Brother,+971500000005,Excellent,Regular,GPA out of bounds [0.0-4.0]: 4.8; Attendance rate out of bounds [0-100]: 115.0
+109,Kareem Adel,20,Jeddah,kareem.adel@example.com,Cybersecurity,2023,-0.5,30,82.0,Cybersecurity | Penetration Testing | Wireshark | Linux,Network Defense (85%),"Vulnerability Assessment [Kali Linux, Metasploit]",+966540001122,,Madinah Road,Jeddah,Saudi Arabia,Adel Kareem,Father,+966549990011,Academic Probation,Needs Improvement,GPA out of bounds [0.0-4.0]: -0.5
+110,Nour Mansour,21,Cairo,nour.mansour@example.com,Information Systems,2022,3.1,80,-10.0,C# | .NET Core | SQL Server,Software Architecture (90%),"E-Commerce Microservice [.NET, SQL]",+201200001111,,Nasr City,Cairo,Egypt,Mansour Nour,Father,+201299992222,Very Good,Critical Warning,Attendance rate out of bounds [0-100]: -10.0
+111,Tariq Ziyad,12,Riyadh,tariq.ziyad@example.com,,,,,80.0,Scratch | Python Basics,Intro to Computing (80%),N/A,+966551113333,,Olaya St,Riyadh,Saudi Arabia,Ziyad Tariq,Father,+966559994444,Not Available,Needs Improvement,Age out of bounds [16-80]: 12.0
+112,Huda Mahmoud,95,Cairo,huda.mahmoud@example.com,,,,,91.0,Research | Academic Writing,N/A,N/A,+201033334444,,Heliopolis,Cairo,Egypt,Mahmoud Huda,Son,+201088887777,Not Available,Regular,Age out of bounds [16-80]: 95.0
+,Khaled Mostafa,22,Giza,khaled.m@example.com,,,,,,Testing | Quality Assurance,N/A,N/A,+967779998877,,Unknown Alley,Sanaa,Yemen,,,,Not Available,Not Available,Missing student_id

@@ -1,39 +1,27 @@
-# Python virtual environments
-.venv/
-venv/
-env/
-.env/
+# Environment variables and secrets (NEVER commit to git)
+.env
+.env.local
+.env.*.local
 
-# Python cache and test artifacts
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
+*$py.class
+
+# Caches and test runners
 .pytest_cache/
 .coverage
 htmlcov/
-.tox/
 
-# IDE settings
-.idea/
-.vscode/
+# Virtual Environments
+venv/
+.venv/
+env/
+ENV/
 
-# Local runtime data and generated outputs
+# Log files
+logs/*.log
 
-logs/*
-!logs/.gitkeep
-
-
-# Local secrets and environment configuration
-.env
-*.env
-*.secret
-*.key
-
-# SQLite and log files created outside the project folders
-
-*.sqlite
-*.sqlite3
-*.log
-
-# OS metadata
+# Operating System files
 .DS_Store
 Thumbs.db

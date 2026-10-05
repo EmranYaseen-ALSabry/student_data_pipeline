@@ -1,51 +1,72 @@
-# خط أنابيب تكامل ومعالجة بيانات الطلاب (Student Data Integration & ETL Pipeline)
+# 🎓 Student Data Integration & ETL Pipeline
+### A Production-Oriented, Fault-Tolerant Multi-Source ETL Pipeline with MongoDB, SQLite, REST API & CSV
 
-مشروع متكامل واحترافي في هندسة البيانات (Production-Ready Data Integration & ETL Pipeline) يهدف إلى استخراج، تنظيف، دمج، تحويل، والتحقق من جودة بيانات الطلاب المجمعة من مصادر متعددة وغير متجانسة (Heterogeneous Sources)، وفقاً لأعلى معايير هندسة البرمجيات وجودة البيانات.
+[![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
+[![Pandas](https://img.shields.io/badge/Pandas-2.0%2B-150458.svg)](https://pandas.pydata.org/)
+[![MongoDB](https://img.shields.io/badge/MongoDB-7.0%2B-green.svg)](https://www.mongodb.com/)
+[![SQLite](https://img.shields.io/badge/SQLite-Relational-003B57.svg)](https://www.sqlite.org/)
+[![Tests](https://img.shields.io/badge/Pytest-14%2F14%20Passing-brightgreen.svg)](https://docs.pytest.org/)
+[![Architecture](https://img.shields.io/badge/Architecture-Pipes%20%26%20Filters-orange.svg)](#1-project-overview--clean-architecture)
 
 ---
 
-## 1. الهيكلية المعمارية للمشروع (Architecture Overview)
+## 1. نظرة عامة على المشروع والهندسة المعمارية (Project Overview & Clean Architecture)
 
-يعتمد المشروع على نمط معمارية الأنابيب والمرشحات (Pipes and Filters Pattern)، حيث تمر البيانات عبر مراحل منفصلة تماماً ومستقلة وظيفياً (Decoupled Layers):
+مشروع متقدم في **هندسة تكامل البيانات (Data Integration & ETL Engineering)** مبني وفق معمارية برمجية نظيفة وقابلة للصيانة والتوسع (**Clean & Modular Architecture**) تتبع نمط **الأنابيب والمرشحات (Pipes & Filters Pattern)**.
+
+يقوم النظام باستخراج بيانات الطلاب من **أربعة مصادر غير متجانسة كلياً (4 Heterogeneous Sources)**:
+1. **ملفات مسطحة (Flat Files - CSV):** تحتوي على البيانات الديموغرافية الأولية (الاسم، العمر، المدينة، البريد).
+2. **قواعد بيانات علائقية (Relational SQL - SQLite):** تحتوي على بيانات الدرجات والملف الأكاديمي المربوطة باستعلام `SQL INNER JOIN`.
+3. **واجهات برمجية شبكية (REST APIs):** تحتوي على مؤشرات الحضور التراكمية مع آليات الصمود الذاتي (Network Resilience & Fallback).
+4. **قواعد بيانات المستندات (NoSQL - MongoDB):** تحتوي على بيانات هرمية وشبه مهيكلة (Semi-structured) غنية تشمل أرقام التواصل، العناوين، بيانات أولياء الأمور، ومصفوفات المهارات والمشاريع والكورسات.
+
+---
+
+## 2. مخطط تدفق البيانات والمعمارية (Architecture Diagram)
 
 ```mermaid
 flowchart TD
-    subgraph S1["1. مصادر البيانات (Extraction Layer)"]
-        CSV["📄 Demographic CSV\n(students.csv)"]
-        DB[("🗄️ SQLite Database\n(students.db)\n[Profiles + Grades JOIN]")]
-        API["🌐 REST API\n(Attendance Service)\n[With Network/JSON Resilience]"]
+    subgraph S1["1. مصادر البيانات غير المتجانسة (Extraction Layer)"]
+        CSV["📄 Demographic CSV\n(data/raw/students.csv)"]
+        SQL[("🗄️ SQLite Database\n(database/students.db)\n[Profiles + Grades JOIN]")]
+        API["🌐 REST API Service\n(Attendance Endpoint)\n[Network Resilience + Fallback]"]
+        MONGO[("🍃 MongoDB Collection\n(student_pipeline.student_extra)\n[Contacts, Skills, Projects]")]
     end
 
-    subgraph S2["2. التنظيف والتوحيد (Cleaning Layer)"]
-        Clean["🧹 Text & City Cleaning\n- Case & Whitespace Normalization\n- Alias resolution (e.g. Cairo, Riyadh)\n- Deduplication"]
+    subgraph S2["2. التنظيف والتوحيد المسبق (Cleaning Layer)"]
+        Clean["🧹 Text & City Cleaning\n- Casing & Whitespace Normalization\n- Alias resolution (e.g. Cairo, Riyadh)\n- Pre-merge Deduplication"]
     end
 
-    subgraph S3["3. الدمج والتكامل (Integration Layer)"]
-        Integrate["🔗 Multi-Source Outer Join\nPrimary Key: student_id"]
+    subgraph S3["3. التكامل والدمج متعدد المصادر (Integration Layer)"]
+        Integrate["🔗 Multi-Source Full Outer Join\n- Standardized Key: student_id (Int64)\n- Coalesce Overlapping Fields\n- Prevent Cartesian Explosions"]
     end
 
     subgraph S4["4. التحويل وهندسة الخصائص (Transformation Layer)"]
-        Transform["⚙️ Feature Engineering & Typing\n- Type Casting (Int64, Float)\n- performance_level (from GPA)\n- attendance_status (from Attendance)"]
+        Transform["⚙️ Feature Engineering & Typing\n- Type Casting (Int64, Float)\n- performance_level (from GPA)\n- attendance_status (from Attendance)\n- NoSQL Array Serialization (' | ')"]
     end
 
-    subgraph S5["5. بوابات الجودة والعزل (Quality & Validation Layer)"]
-        Validate{"🛡️ Strict Quality Gates\n1. student_id unique & non-null\n2. 16 <= age <= 80\n3. 0.0 <= gpa <= 4.0\n4. 0.0 <= attendance <= 100.0"}
+    subgraph S5["5. بوابات الجودة وعزل السجلات (Quality Gates & Dead Letter Queue)"]
+        Validate{"🛡️ Zero-Trust Quality Gates\n1. student_id: Not Null, Unique, Positive\n2. 16 <= Age <= 80\n3. 0.0 <= GPA <= 4.0\n4. 0.0 <= Attendance <= 100.0\n[Optional Fields Protected]"}
     end
 
-    subgraph S6["6. طبقة التخزين والتسجيل (Loading & Logging)"]
-        ValidOut[("✅ final_dataset.csv\n(Clean & Processed)")]
-        RejectOut[("❌ rejected_records.csv\n(Isolated with error_reason)")]
-        LogFile["📝 logs/pipeline.log\n(Timestamped Audit Trail)"]
+    subgraph S6["6. التخزين النهائي ومسار التدقيق (Loading & Audit Trail)"]
+        ValidOut[("✅ data/processed/final_dataset.csv\n(16 Valid Unified Records)")]
+        RejectOut[("❌ data/rejected/rejected_records.csv\n(6 Defective Records with error_reason)")]
+        LogFile["📝 logs/pipeline.log\n(Dual Console & File Logging)"]
     end
 
     CSV --> Clean
-    DB --> Integrate
-    API --> Integrate
     Clean --> Integrate
+    SQL --> Integrate
+    API --> Integrate
+    MONGO --> Integrate
+
     Integrate --> Transform
     Transform --> Validate
-    Validate -->|Passed Quality Checks| ValidOut
-    Validate -->|Violated Rules| RejectOut
+
+    Validate -->|Compliant| ValidOut
+    Validate -->|Defective| RejectOut
+
     S1 -.-> LogFile
     S2 -.-> LogFile
     S3 -.-> LogFile
@@ -56,195 +77,262 @@ flowchart TD
 
 ---
 
-## 2. بنية المجلدات والملفات (Project Structure)
+## 3. بنية المجلدات والملفات (Project Directory Structure)
 
 ```text
 student_data_pipeline/
 │
 ├── app/
 │   ├── __init__.py
-│   ├── sources/                  # طبقة استخراج البيانات من المصادر المتعددة
-│   │   ├── __init__.py
-│   │   ├── csv_source.py         # قراءة ملفات CSV الأولية باستخدام pandas
-│   │   ├── api_source.py         # الاتصال بـ REST API ومعالجة أخطاء الشبكة والـ JSON
-│   │   └── database_source.py    # استخراج البيانات عبر استعلامات SQL Relational JOIN
 │   │
-│   ├── transformation/           # طبقة التنظيف، التحويل، والدمج
+│   ├── sources/                  # طبقة الاستخراج الحصري (Extraction Layer)
+│   │   ├── __init__.py
+│   │   ├── csv_source.py         # استخراج بيانات CSV الأولية
+│   │   ├── database_source.py    # استخراج بيانات SQLite العلائقية عبر SQL JOIN
+│   │   ├── api_source.py         # استدعاء REST API مع معالجة Timeout والـ Fallback
+│   │   └── mongodb_source.py     # استخراج مستندات MongoDB وتسطيحها بـ json_normalize
+│   │
+│   ├── transformation/           # طبقة المعالجة والتحويل (Transformation Layer)
 │   │   ├── __init__.py
 │   │   ├── cleaner.py            # توحيد المدن والنصوص وحذف التكرارات
-│   │   ├── transformer.py        # إنشاء الأعمدة المشتقة (performance_level & attendance_status)
-│   │   └── integration.py        # دمج المصادر الثلاثة اعتماداً على المفتاح student_id
+│   │   ├── integration.py        # دمج المصادر الأربعة عبر Full Outer Join على student_id
+│   │   └── transformer.py        # اشتقاق المؤشرات وتسريح مصفوفات NoSQL إلى CSV
 │   │
-│   ├── validation/               # طبقة فحص الجودة وتطبيق القواعد الصارمة
+│   ├── validation/               # طبقة التحقق وحوكمة الجودة (Data Quality Layer)
 │   │   ├── __init__.py
-│   │   └── quality.py            # تطبيق بوابات الجودة وعزل السجلات مع ذكر error_reason
+│   │   └── quality.py            # فحص بوابات الجودة وعزل السجلات مع عمود error_reason
 │   │
-│   ├── output/                   # طبقة التصدير والتخزين النهائي
+│   ├── output/                   # طبقة التصدير والتخزين (Loading Layer)
 │   │   ├── __init__.py
-│   │   └── csv_writer.py         # تصدير البيانات إلى ملفات CSV بتنسيق UTF-8
+│   │   └── csv_writer.py         # كتابة ملفات CSV بترميز UTF-8 وضمان وجود المجلدات
 │   │
-│   └── utils/                    # الأدوات المساعدة والمشتركة
+│   └── utils/                    # الخدمات المشتركة (Shared Utilities)
 │       ├── __init__.py
-│       └── logger.py             # نظام تسجيل موحد للكونسول وملف logs/pipeline.log
+│       └── logger.py             # تسجيل السجلات المزدوج (Console + logs/pipeline.log)
 │
-├── data/
-│   ├── raw/                      # البيانات الأولية التجريبية
-│   │   └── students.csv          # عينة بيانات ديموغرافية للطلاب
-│   ├── processed/                # البيانات المعالجة والمقبولة نهائياً
-│   │   └── final_dataset.csv     # السجلات النظيفة المطابقة لجميع معايير الجودة
-│   └── rejected/                 # السجلات المرفوضة لعدم مطابقة الشروط
-│       └── rejected_records.csv  # السجلات المعزولة مع عمود توثيق أسباب الرفض (error_reason)
+├── data/                         # مخازن البيانات
+│   ├── raw/
+│   │   └── students.csv          # عينة البيانات الديموغرافية الأولية
+│   ├── processed/
+│   │   └── final_dataset.csv     # السجلات المقبولة والنظيفة بعد الدمج والتكامل
+│   └── rejected/
+│       └── rejected_records.csv  # السجلات المعطوبة المعزولة مع توثيق error_reason
 │
-├── database/                     # قاعدة بيانات علائقية محلية
-│   └── students.db               # قاعدة بيانات SQLite بجداول مربوطة بمفتاح student_id
+├── database/
+│   └── students.db               # قاعدة بيانات SQLite بجدولي academic_profiles و academic_grades
 │
-├── tests/                        # الاختبارات الآلية (Unit & Integration Tests)
+├── scripts/
+│   └── seed_mongodb.py           # سكربت مستقل لزرع 22 وثيقة تجريبية في MongoDB
+│
+├── tests/
 │   ├── __init__.py
-│   └── test_pipeline.py          # اختبارات الجودة والاستخراج والتنظيف والتحويل
+│   └── test_pipeline.py          # 14 اختبار وحدة بـ pytest تغطي كافة سيناريوهات المنظومة
 │
-├── logs/                         # سجلات تتبع سير العمليات (Audit Logging)
-│   └── pipeline.log              # ملف السجلات بتنسيق زمني واضح
+├── logs/
+│   └── pipeline.log              # ملف السجل الزمني المركزي للمشروع
 │
-├── main.py                       # نقطة الانطلاق الرئيسية لتشغيل خط الأنابيب (Orchestrator)
-├── requirements.txt              # الحزم والمكتبات المعتمدة للمشروع
-└── README.md                     # التوثيق الشامل والإجابة على الأسئلة التحليلية
+├── .env                          # المتغيرات البيئية الحقيقية (مستبعد من Git)
+├── .env.example                  # قالب المتغيرات البيئية الإرشادي
+├── .gitignore                    # استبعاد الملفات السرية والكاش والبيئات الافتراضية
+├── main.py                       # المايسترو ومنسق خط الأنابيب (Orchestrator)
+├── requirements.txt              # الحزم والتبعيات البرمجية المعتمدة
+└── README.md                     # التوثيق الشامل والأكاديمي للمشروع
 ```
 
 ---
 
-## 3. متطلبات التثبيت والتشغيل (Installation & Execution)
+## 4. معمارية MongoDB وتصميم المستندات (MongoDB Architecture & Schema)
 
-### 3.1 تهيئة بيئة العمل الافتراضية
-```bash
-# إنشاء البيئة الافتراضية
+### 4.1 إعدادات الاتصال:
+- **Database:** `student_pipeline`
+- **Collection:** `student_extra`
+- **Driver:** `pymongo`
+
+### 4.2 نموذج الوثيقة (Document Schema):
+تتميز الوثائق بعدم تكرار البيانات الموجودة في CSV أو SQLite (مثل الاسم والمعدل)، والتركيز على السمات شبه المهيكلة:
+
+```json
+{
+  "student_id": 101,
+  "contact": {
+    "phone": "+967771234567",
+    "emergency_contact": "+967771999001"
+  },
+  "address": {
+    "street": "Al-Zubairi",
+    "city": "Sanaa",
+    "country": "Yemen"
+  },
+  "guardian": {
+    "name": "Ali Ahmed",
+    "relationship": "Father",
+    "phone": "+967770000001"
+  },
+  "skills": ["Python", "SQL", "MongoDB"],
+  "courses": [
+    {"name": "Python Programming", "grade": 92},
+    {"name": "Database Systems", "grade": 88}
+  ],
+  "projects": [
+    {
+      "name": "Student Data Pipeline",
+      "technologies": ["Python", "Pandas", "MongoDB"]
+    }
+  ]
+}
+```
+
+---
+
+## 5. دليل التثبيت والتشغيل على بيئة Windows (Installation & Setup)
+
+### 5.1 المتطلبات المسبقة:
+- بايثون مثبت (Python 3.10+).
+- خادم MongoDB مثبت ويعمل كخدمة على Windows (أو يمكن تشغيله عبر الأوامر أدناه).
+
+### 5.2 التحقق من خدمة MongoDB وتشغيلها (Windows PowerShell):
+```powershell
+# التحقق من حالة خدمة MongoDB
+Get-Service MongoDB
+
+# إذا كانت الخدمة متوقفة، قم بتشغيلها بصلاحيات المسؤول:
+Start-Service MongoDB
+```
+
+### 5.3 تهيئة بيئة العمل وتثبيت التبعيات:
+```powershell
+# 1. الدخول إلى مجلد المشروع
+cd "C:\Users\OMRRAN\.gemini\antigravity\scratch\student_data_pipeline"
+
+# 2. إنشاء وتفعيل البيئة الافتراضية
 python -m venv venv
+.\venv\Scripts\Activate.ps1
 
-# تفعيل البيئة:
-# على Windows (PowerShell):
-venv\Scripts\Activate.ps1
-# على Linux / macOS:
-source venv/bin/activate
+# 3. تثبيت المتطلبات
+python -m pip install -r requirements.txt
 ```
 
-### 3.2 تثبيت الحزم المطلوبة
-```bash
-pip install -r requirements.txt
+### 5.4 إعداد المتغيرات البيئية:
+انسخ ملف `.env.example` إلى ملف `.env`:
+```powershell
+Copy-Item .env.example .env
 ```
 
-### 3.3 تشغيل خط أنابيب البيانات (ETL Execution)
-```bash
+محتوى ملف `.env`:
+```ini
+MONGODB_URI=mongodb://localhost:27017
+MONGODB_DATABASE=student_pipeline
+MONGODB_COLLECTION=student_extra
+MONGODB_TIMEOUT_MS=3000
+```
+
+### 5.5 زرع البيانات التجريبية في MongoDB:
+```powershell
+python scripts/seed_mongodb.py
+```
+*المخرج المتوقع:* `SUCCESS: Inserted 22 student documents into 'student_pipeline.student_extra'.`
+
+### 5.6 تشغيل خط أنابيب البيانات الكامل (Run Pipeline):
+```powershell
 python main.py
 ```
 
-### 3.4 تشغيل الاختبارات الآلية (Running Unit Tests)
-```bash
+### 5.7 تشغيل حزمة الاختبارات الآلية (Run Pytest):
+```powershell
 python -m pytest -v
+```
+*النتيجة:* اجتياز **14 اختبار وحدة من أصل 14 بنسبة نجاح 100%**.
+
+---
+
+## 6. التعامل مع مصفوفات NoSQL عند التصدير لـ CSV (Array Serialization Policy)
+
+بما أن ملفات CSV عبارة عن جداول مسطحة ثنائية الأبعاد لا تدعم المصفوفات بشكل أصلي، اعتمدنا استراتيجية تسريح معيارية (Standardized Serialization):
+
+1. **المهارات (`skills`):**
+   - تحويل المصفوفة `["Python", "SQL", "MongoDB"]` إلى نص مقروء مفصول بشريط:
+     `Python | SQL | MongoDB`
+2. **الكورسات (`courses`):**
+   - تحويل مصفوفة الكائنات إلى ملخص تفصيلي:
+     `Python Programming (92%) | Database Systems (88%)`
+3. **المشاريع (`projects`):**
+   - تحويل مصفوفة الكائنات إلى صيغة تجمع بين اسم المشروع وتقنياته:
+     `Student Data Pipeline [Python, Pandas, MongoDB]`
+4. **القيم الفارغة:** استبدال القوائم الفارغة أو المفقودة بالقيمة الصريحة `"N/A"` بدلاً من تركها `NaN` مشوهة.
+
+---
+
+## 7. بوابات الجودة وحوكمة البيانات (Data Quality Gates)
+
+يطبق النظام سياسة واضحة تفصل بين الحقول الحرجة والحقول الاختيارية:
+
+| نوع الحقل | الحقول المشمولة | قاعدة التحقق | النتيجة عند المخالفة |
+| :--- | :--- | :--- | :--- |
+| **حقول حرجة (Critical)** | `student_id` | يجب أن يكون رقماً صحيحاً موجباً فريداً وغير فارغ. | عزل السجل فوراً إلى `rejected_records.csv` مع ذكر `Missing student_id` أو `Duplicate student_id`. |
+| **حقول حرجة (Critical)** | `age` | $16 \le \text{age} \le 80$ | عزل السجل مع ذكر `Age out of bounds [16-80]: {val}`. |
+| **حقول حرجة (Critical)** | `gpa` | $0.0 \le \text{gpa} \le 4.0$ | عزل السجل مع ذكر `GPA out of bounds [0.0-4.0]: {val}`. |
+| **حقول حرجة (Critical)** | `attendance_rate` | $0.0 \le \text{rate} \le 100.0$ | عزل السجل مع ذكر `Attendance rate out of bounds [0-100]: {val}`. |
+| **حقول حرجة (Critical)** | `email` | التحقق من وجود `@` واسم النطاق. | عزل السجل مع ذكر `Invalid email format`. |
+| **حقول اختيارية (Optional)** | `phone`, `guardian`, `skills`, `projects` | لا يُشترط وجودها لاكتمال الطالب. | **لا يُرفض الطالب أبداً**، وتُحفظ كـ `"N/A"` دون التأثير على قبوله. |
+
+---
+
+## 8. عينات من المخرجات الفعلية (Example Output)
+
+### 8.1 عينة من البيانات المقبولة (`data/processed/final_dataset.csv` - 16 سجلاً):
+```csv
+student_id,name,age,city,email,major,enrollment_year,gpa,total_credits,attendance_rate,skills,courses,projects,contact.phone,guardian.name,performance_level,attendance_status
+101,Ahmed Ali,21,Cairo,ahmed.ali@example.com,Computer Science,2022,3.85,90,92.5,Python | SQL | MongoDB,Python Programming (92%) | Database Systems (88%),Student Data Pipeline [Python, Pandas, MongoDB],+967771234567,Ali Ahmed,Excellent,Regular
+102,Fatima Omar,22,Alexandria,fatima.omar@example.com,Data Engineering,2021,3.4,110,88.0,R | Python | Data Mining | Tableau,Big Data Analytics (95%) | Data Warehousing (91%),Customer Churn Prediction [Python, Scikit-Learn],+967772345678,Omar Salem,Very Good,Regular
+113,,Sanaa,,,,,,,,Go | Distributed Systems | gRPC,Cloud Backend Systems (93%),High-Throughput Message Queue [Go, RabbitMQ],+967773456789,Rashid Nabil,Not Available,Not Available
+```
+
+### 8.2 عينة من السجلات المعزولة (`data/rejected/rejected_records.csv` - 6 سجلات):
+```csv
+student_id,name,age,city,gpa,attendance_rate,error_reason
+105,Yousef Hassan,22,Dubai,4.8,115.0,GPA out of bounds [0.0-4.0]: 4.8; Attendance rate out of bounds [0-100]: 115.0
+109,Kareem Adel,20,Jeddah,-0.5,82.0,GPA out of bounds [0.0-4.0]: -0.5
+110,Nour Mansour,21,Cairo,3.1,-10.0,Attendance rate out of bounds [0-100]: -10.0
+111,Tariq Ziyad,12,Riyadh,,,Age out of bounds [16-80]: 12.0
+112,Huda Mahmoud,95,Cairo,,,Age out of bounds [16-80]: 95.0
+,Khaled Mostafa,22,Giza,,,Missing student_id
 ```
 
 ---
 
-## 4. شرح تفصيلي لمخرجات خط الأنابيب (Pipeline Outputs)
+## 9. الصمود وإدارة الأعطال (Fault Tolerance & Error Resilience)
 
-1. **الملف النظيف `data/processed/final_dataset.csv`**:
-   - يحتوي على كافة سجلات الطلاب التي اجتازت بنجاح جميع بوابات الجودة والتنظيف.
-   - يتضمن الأعمدة المدمجة من المصادر الثلاثة:
-     `student_id`, `name`, `age`, `city`, `email`, `major`, `enrollment_year`, `gpa`, `total_credits`, `attendance_rate`, `performance_level`, `attendance_status`.
-   - تم توحيد أسماء المدن (مثل تحويل `cairo` أو `CAIRO` إلى `Cairo`).
-   - تم حساب الأعمدة المشتقة بدقة:
-     - `performance_level`: تصنيف المعدل التراكمي (Excellent, Very Good, Good, Satisfactory, Academic Probation).
-     - `attendance_status`: تصنيف نسبة الحضور (Regular, Needs Improvement, Critical Warning).
-
-2. **ملف السجلات المرفوضة `data/rejected/rejected_records.csv`**:
-   - يحتوي على السجلات المعطوبة أو المخالفة للقواعد مع توضيح سبب الرفض بالتفصيل داخل عمود **`error_reason`**.
-   - أمثلة على السجلات المرفوضة المرصودة:
-     - طالب يقل عمره عن 16 سنة (مثال: `Age out of bounds [16-80]: 12.0`).
-     - طالب يزيد معدله عن 4.0 أو نسبة حضوره عن 100% (مثال: `GPA out of bounds [0.0-4.0]: 4.8; Attendance rate out of bounds [0-100]: 115.0`).
-     - سجل يفتقر إلى `student_id` (مثال: `Missing student_id`).
-
-3. **ملف السجلات `logs/pipeline.log`**:
-   - تسجيل زمني دقيق لكل مرحلة، بما في ذلك عدد السجلات المستخرجة، نتائج التنظيف، محاولات استدعاء الـ API وحالات السقوط، وإحصائيات القبول والرفض النهائية.
+تم تصميم النظام ليكون **شديد المرونة (Highly Resilient)** ضد تعطل أو بطء أي مصدر من المصادر:
+- **في حال تعطل MongoDB أو انقطاع الاتصال به:** يُسجل الـ Logger خطأ `[MongoDB ServerSelectionTimeoutError]`، وتعود الدالة بجدول فارغ `pd.DataFrame()`، ويواصل خط الأنابيب عمله عبر دمج المصادر الثلاثة الأخرى بنجاح دون أي انهيار (Zero Crash).
+- **في حال تعطل REST API:** يُسجل الخطأ ويتم تفعيل بديل الحضور الاحتياطي (Fallback Attendance Provider) لضمان استمرارية المعالجة.
+- **في حال غياب ملف CSV:** يتم رصد `FileNotFoundError` وتوثيق ذلك في الـ Log.
 
 ---
 
-## 5. الإجابات التحليلية المفصلة للتكليف الأكاديمي (Analytical Questions)
+## 10. الإجابات التحليلية الأكاديمية (Analytical Concepts in Data Engineering)
 
-### السؤال الأول: ما هو الفرق الجوهري بين البيانات الأولية (Raw Data) والبيانات المعالجة (Processed Data)؟ ولماذا لا يُنصح بتطبيق التحليلات أو نماذج التعلم الآلي مباشرة على البيانات الأولية؟
-
-#### 1. المقارنة الجوهرية:
-
-| وجه المقارنة | البيانات الأولية (Raw Data) | البيانات المعالجة (Processed Data) |
-| :--- | :--- | :--- |
-| **الحالة والأصل** | بيانات غير منقحة تؤخذ كما هي من المصادر (Immutable Source of Truth). | بيانات مرت بسلسلة معالجات (تنظيف، توحيد، تحويل، ودمج). |
-| **الجودة والموثوقية** | تحوي قيماً مفقودة، تكرارات، أخطاء إملائية، وشذوذاً رقمياً. | تخضع لبوابات فحص الجودة (Validation Gates) وخالية من الشوائب. |
-| **البنية والاتساق** | غير متجانسة وتختلف صيغها ومفاهيمها بين مصدر وآخر. | ذات مخطط موحد (Unified Schema) وأنواع بيانات مدققة وصارمة. |
-| **الاستخدام المستهدف** | الحفظ المؤقت والأرشفة ولأغراض التدقيق التاريخي وإعادة المعالجة. | التحليل الإحصائي، لوحات الأعمال (BI Dashboards)، وتدريب نماذج الـ AI/ML. |
-
-#### 2. مخاطر بناء التحليلات ونماذج الذكاء الاصطناعي مباشرة على البيانات الأولية:
-1. **مبدأ "المدخلات الفاسدة تؤدي إلى مخرجات فاسدة" (Garbage In, Garbage Out - GIGO):**
-   - إذا تم تغذية نموذج تنبؤي ببيانات تحتوي على أعمار شاذة (مثل عمر 95 لطالب في مرحلة بكالوريوس أو معدل 4.8 من أصل 4.0)، فإن الأوزان الرياضية للنموذج ستنحرف (Weight Distortion)، مما يعطي نتائج واستنتاجات مضللة.
-2. **عدم استقرار الأنظمة البرمجية (System Crashing):**
-   - يؤدي وجود نصوص في أعمدة رقمية أو قيم فارغة (`NaN` أو مسافات خالية) إلى حدوث استثناءات غير متوقعة (`TypeErrors` و `NullPointerExceptions`) أثناء العمليات الحسابية أو تشغيل لوحات الـ BI.
-3. **التحيز والتكرار غير العادل (Data Bias & Duplicate Skewing):**
-   - تكرار السجلات في البيانات الخام يؤدي إلى تضخيم فئات معينة حسابياً، مما يشوه مؤشرات الأداء الحقيقية (KPIs).
+### س1: ما هو دور MongoDB الحقيقي في هذا الـ Pipeline، وما الفرق بين دوره وبين SQLite و CSV و REST API؟
+في هذا المشروع، تمثل المصادر الأربعة النماذج الحقيقية لمعمارية تخزين البيانات الحديثة:
+1. **CSV (Flat File Source):** مصدر إدخال أولي بشري يحتوي على بيانات ديموغرافية أساسية، يعاني من مشكلات التنسيق والفراغات الزائدة واختلاف حالات الأحرف، ويحتاج إلى تنظيف مكثف.
+2. **SQLite (Relational Database):** تمثل النظام الإداري الأكاديمي الأساسي (Transactional Core / OLTP)، حيث تطبق قواعد العلاقات (ACID) والربط بمفاتيح أساسية وخارجية (`FOREIGN KEY`)، وهي الأنسب للبيانات المالية والأكاديمية المهيكلة (الدرجات، الاعتماد، وسنوات القيد).
+3. **REST API (Microservices / Web Services):** تمثل خدمة سحابية خارجية مستقلة (مثل نظام البوابات الذكية للحضور)، يتم الوصول إليها عبر بروتوكول HTTP وتتطلب معالجة خاصة لبطء الشبكة والـ Timeouts.
+4. **MongoDB (Document-Oriented NoSQL):** تمثل مستودع الملف الشخصي المرن (Rich Student Profile). في هذا النظام، تتغير اهتمامات الطلاب ومهاراتهم ومشاريعهم باستمرار؛ وبالتالي فإن محاولة وضع هذه المصفوفات المتداخلة في SQL تتطلب إنشاء جداول وسيطة متعددة (`many-to-many junction tables`). بينما توفر MongoDB مرونة استيعاب الهياكل المتداخلة (`Nested Objects & Arrays`) دون الحاجة لتغيير المخطط (Schema-less flexibility).
 
 ---
 
-### السؤال الثاني: ما هي أهمية التحقق من جودة البيانات (Data Validation) في خطوط أنابيب هندسة البيانات؟ وما هي أبعاد الجودة الرئيسية؟
-
-تعد مرحلة التحقق من الجودة خط الدفاع الأول عن مصداقية قرارات المؤسسة وأصولها الرقمية. غياب هذه المرحلة يحول خط الأنابيب إلى مجرد "ممر لنقل الأخطاء" بدلاً من كونه أداة لتعظيم القيمة.
-
-#### الأبعاد الستة الرئيسية لجودة البيانات (The 6 Dimensions of Data Quality):
-1. **الاكتمال (Completeness):** التأكد من عدم فقدان الحقول الحيوية المحددة للكيان، مثل التأكد من عدم فراغ `student_id`.
-2. **التفرد (Uniqueness):** ضمان عدم تكرار الهوية ذاتها أكثر من مرة لكيان واحد، لمنع الحساب المزدوج للطلاب.
-3. **الصلاحية والمطابقة (Validity):** مطابقة القيم لقواعد العمل والنطاقات المنطقية، مثل (أن يكون العمر بين 16 و 80، والـ GPA بين 0.0 و 4.0).
-4. **الدقة (Accuracy):** مطابقة القيم للحقيقة الواقعية دون تلاعب أو تشويش حسابي.
-5. **الاتساق (Consistency):** توافق البيانات عند دمجها من مصادر متعددة (عدم وجود تعارض بين الاسم في CSV والاسم في قاعدة البيانات).
-6. **التوقيت الزمني (Timeliness):** وصول البيانات في الوقت المناسب للاستفادة منها في اتخاذ القرار.
+### س2: ما هو الفرق بين البيانات الأولية (Raw Data) والبيانات المعالجة (Processed Data)؟
+- **البيانات الأولية (Raw Data):** هي البيانات الأصلية كما استُخرجت من أنظمتها، تمتاز بكونها غير قابلة للتعديل (Immutable)، ولكنها تحوي أخطاء وتكرارات وقيم شاذة. لا يجوز تغذية نماذج الذكاء الاصطناعي (AI/ML) أو تقارير الأعمال بها مباشرة تجنباً لمبدأ **"المدخلات الفاسدة تؤدي إلى مخرجات فاسدة" (Garbage In, Garbage Out)**.
+- **البيانات المعالجة (Processed Data):** هي البيانات التي خضعت لخطوات التنظيف، تصحيح الأنواع، سد الفجوات، التحقق من الجودة، وتسريح المصفوفات، مما يجعلها موحدة، متسقة، وموثوقة بنسبة 100% للتحليل وصنع القرار.
 
 ---
 
-### السؤال الثالث: مقارنة معمارية وهندسية بين المعالجة الدفعية (Batch Processing) والمعالجة اللحظية/المتدفقة (Streaming Processing)
-
-| وجه المقارنة | المعالجة الدفعية (Batch Processing) | المعالجة المتدفقة (Streaming Processing) |
-| :--- | :--- | :--- |
-| **مفهوم التشغيل** | معالجة كتل ضخمة من البيانات في فترات زمنية مجدولة (ليلياً، أسبوعياً). | معالجة الأحداث لحظة وقوعها حدثاً بحدث (Event-driven / Continuous). |
-| **زمن الاستجابة (Latency)** | يتراوح بين دقائق وساعات وأحياناً أيام. | لحظي (Real-time)، من أجزاء من الثانية إلى ثوانٍ معدودة. |
-| **حجم البيانات (Data Scope)** | كامل البيانات التراكمية التاريخية للمجموعة (Bounded Dataset). | تدفق لا نهائي من البيانات المستمرة (Unbounded Data Stream). |
-| **التعقيد المعماري والتكلفة** | أبسط هندسياً وأقل تكلفة، وتستغل فترات انخفاض الحمل الحسابي. | تتطلب بنية تحتية معقدة ومراقبة دائمة وتكلفة تشغيلية أعلى. |
-| **أمثلة الأدوات والتقنيات** | Apache Spark, AWS Glue, dbt, SQL Stored Procedures. | Apache Kafka, Apache Flink, Spark Streaming, AWS Kinesis. |
-| **حالات الاستخدام المثلى** | تقارير الرواتب، حساب المعدلات الفصلية للطلاب، تدريب نماذج الـ AI الدورية. | كشف الاحتيال المالي، تتبع أساطيل النقل، مراقبة أجهزة IoT الحيوية. |
+### س3: ما الفرق بين المعالجة الدفعية (Batch Processing) والمعالجة المتدفقة (Streaming Processing)؟
+- **المعالجة الدفعية (Batch Processing - كالمطبقة في هذا المشروع):** تُجمع البيانات وتُعالج في فترات زمنية محددة أو عند الطلب ككتلة واحدة (Bounded Data). تمتاز بالدقة العالية، استهلاك أقل للموارد أثناء فترات الخمول، وسهولة تتبع الأخطاء، وهي مثالية لتقارير الطلاب الفصلية وإصدار الدرجات.
+- **المعالجة المتدفقة (Streaming Processing):** تُعالج كل حركة أو حدث فور وقوعه (Unbounded Data Streams عبر أنظمة مثل Kafka و Flink). زمن الاستجابة أجزاء من الثانية، وتكلفتها التشغيلية أعلى، وتُستخدم في حالات مثل كشف الاحتيال المصرفي اللحظي أو مراقبة خوادم المستشفيات.
 
 ---
 
-### السؤال الرابع: ما هي أفضل الممارسات والاستراتيجيات الهندسية للتعامل مع السجلات المعطوبة (Defective/Rejected Records)؟
-
-في أنظمة هندسة البيانات الحديثة، توجد ثلاث استراتيجيات رئيسية:
-
-1. **الحذف والإسقاط (Dropping):**
-   - *الآلية*: إهمال وحذف السجل المخالف دون تسجيل.
-   - *التقييم*: غير مرغوبة في بيئات الإنتاج، لأنها تتسبب في فقدان غير مرئي للبيانات وتمنع مسؤولي المصادر من معرفة الأخطاء وتصحيحها.
-2. **التعويض والتقدير (Imputation):**
-   - *الآلية*: استبدال القيم المفقودة أو الشاذة بمتوسط أو وسيط حسابي أو قيمة افتراضية.
-   - *التقييم*: مفيدة فقط في حقول معينة غير حرجة (مثل وضع مدينة "Unknown")، ولكنها خطيرة جداً في الحقول المعرّفة (مثل تعويض `student_id` المفقود).
-3. **العزل والتخزين في طابور السجلات المعطوبة (Dead Letter Queue / Rejected Storage) - الاستراتيجية المطبقة هنا:**
-   - *الآلية*: توجيه السجلات المخالفة إلى مخزن معزول (`data/rejected/rejected_records.csv`) مع توثيق سبب الخطأ تفصيلياً في عمود `error_reason`.
-   - *المزايا*:
-     - **قابلية التدقيق الكاملة (Full Auditability):** لا تضيع أي بيانات من المصادر الأولية.
-     - **إمكانية إعادة المعالجة (Reprocessing Capability):** بمجرد تصحيح الخطأ من قِبل الفريق المسؤول، يمكن إعادة إدخال هذه السجلات في الـ Pipeline.
-     - **الحفاظ على سلامة البيانات المقبولة:** ضمان عدم تسرب أي بيانات مشوهة للمستودع النهائي.
-
----
-
-### السؤال الخامس: ما هو انحراف المخطط (Schema Drift) وكيف تؤثر حوكمة البيانات (Data Governance) على استقرار الـ Pipeline؟
-
-#### 1. مفهوم انحراف المخطط (Schema Drift):
-هو التغير غير المتوقع أو التدريجي في بنية البيانات الواردة من المصادر الخارجية، مثل:
-- تغيير اسم عمود (مثال: تغيير `student_id` إلى `id` أو `std_id`).
-- إضافة أعمدة جديدة لم تكن موجودة.
-- حذف عمود أساسي يعتمد عليه خط الأنابيب.
-- تغير نوع البيانات (مثال: إرسال الـ `gpa` كنص `"Four"` بدلاً من رقم عشري `4.0`).
-
-#### 2. دور حوكمة البيانات في التصدي لانحراف المخطط:
-- **عقود البيانات (Data Contracts):** اتفاقية رسمية وملزمة بين منتجي البيانات (Data Producers) ومستهلكي البيانات (Data Consumers) تمنع إجراء تعديلات غير منسقة.
-- **البرمجة الدفاعية (Defensive Programming):** كما تم في هذا المشروع، من خلال دوال التنظيف والـ Type Casting واستخدام أدوات تدقيق تمنع انهيار خط الأنابيب عند حدوث انحراف طفيف.
-- **تتبع نسب البيانات (Data Lineage):** معرفة المسار الدقيق للبيانات من المنشأ حتى التقارير النهائية لتحديد أثر أي تغيير يطرأ في المصدر.
+### س4: ما هي أفضل استراتيجيات التعامل مع السجلات المعطوبة (Rejected Records)؟
+1. **الحذف والإسقاط (Dropping):** خيار غير محبذ في بيئات الإنتاج لأنه يتسبب في فقدان غير موثق للبيانات ويحرم المؤسسة من معرفة الخلل.
+2. **التعويض (Imputation):** مناسب لبعض الحقول الوصفية، ولكنه خطير جداً في الحقول الحرجة كالمعدل والمعرف.
+3. **طوابير السجلات المعطوبة (Dead Letter Queue / Rejected Storage - المعتمدة في هذا المشروع):** عزل السجلات في مخزن منفصل (`rejected_records.csv`) مع توثيق كافة الأسباب داخل عمود `error_reason`. تتيح هذه الاستراتيجية الشفافية الكاملة وقابلية التدقيق (Full Auditability) وإعادة المعالجة فور تصحيح الخلل من قِبل الفريق المسؤول.
