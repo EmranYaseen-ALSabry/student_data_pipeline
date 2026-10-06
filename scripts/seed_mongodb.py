@@ -32,10 +32,9 @@ def get_sample_students_data() -> List[Dict[str, Any]]:
     """
     return [
         {
-            "student_id": 101,
+            "student_id": 102,
             "contact": {
                 "phone": "+967771234567",
-                "emergency_contact": "+967771999001"
             },
             "address": {
                 "street": "Al-Zubairi",
@@ -57,10 +56,9 @@ def get_sample_students_data() -> List[Dict[str, Any]]:
             ]
         },
         {
-            "student_id": 102,
+            "student_id": 101,
             "contact": {
                 "phone": "+967772345678",
-                "emergency_contact": "+967772999002"
             },
             "address": {
                 "street": "Corniche Road",
@@ -295,217 +293,6 @@ def get_sample_students_data() -> List[Dict[str, Any]]:
             "projects": []
         },
         # MongoDB-exclusive students (Demonstrating Outer Join capture)
-        {
-            "student_id": 113,
-            "contact": {
-                "phone": "+967773456789"
-            },
-            "address": {
-                "street": "Hadda Street",
-                "city": "Sanaa",
-                "country": "Yemen"
-            },
-            "guardian": {
-                "name": "Rashid Nabil",
-                "relationship": "Father",
-                "phone": "+967770000013"
-            },
-            "skills": ["Go", "Distributed Systems", "gRPC"],
-            "courses": [
-                {"name": "Cloud Backend Systems", "grade": 93}
-            ],
-            "projects": [
-                {"name": "High-Throughput Message Queue", "technologies": ["Go", "RabbitMQ"]}
-            ]
-        },
-        {
-            "student_id": 114,
-            "contact": {
-                "phone": "+967774567890"
-            },
-            "address": {
-                "street": "Gamal Street",
-                "city": "Taiz",
-                "country": "Yemen"
-            },
-            "guardian": {
-                "name": "Waleed Sami",
-                "relationship": "Father",
-                "phone": "+967770000014"
-            },
-            "skills": ["Flutter", "Dart", "Firebase"],
-            "courses": [
-                {"name": "Mobile Application Dev", "grade": 88}
-            ],
-            "projects": [
-                {"name": "Student Attendance App", "technologies": ["Flutter", "Firebase"]}
-            ]
-        },
-        {
-            "student_id": 115,
-            "contact": {
-                "phone": "+966567778899"
-            },
-            "address": {
-                "street": "Corniche",
-                "city": "Khobar",
-                "country": "Saudi Arabia"
-            },
-            "guardian": {
-                "name": "Ibrahim Khalil",
-                "relationship": "Father",
-                "phone": "+966569990015"
-            },
-            "skills": ["Data Engineering", "Apache Spark", "Kafka", "Python"],
-            "courses": [
-                {"name": "Real-time Stream Processing", "grade": 97}
-            ],
-            "projects": [
-                {"name": "Financial Fraud Stream Engine", "technologies": ["Kafka", "PySpark"]}
-            ]
-        },
-        {
-            "student_id": 116,
-            "contact": {
-                "phone": "+201500003333"
-            },
-            "address": {
-                "street": "Shubra",
-                "city": "Cairo",
-                "country": "Egypt"
-            },
-            "guardian": {
-                "name": "Adham Gamal",
-                "relationship": "Father",
-                "phone": "+201599994444"
-            },
-            "skills": ["SQL", "PostgreSQL", "Database Administration"],
-            "courses": [
-                {"name": "Advanced Relational Modeling", "grade": 91}
-            ],
-            "projects": []
-        },
-        {
-            "student_id": 117,
-            "contact": {
-                "phone": "+971520004455"
-            },
-            "address": {
-                "street": "Al Maryah Island",
-                "city": "Abu Dhabi",
-                "country": "UAE"
-            },
-            "guardian": {
-                "name": "Sultan Majid",
-                "relationship": "Brother",
-                "phone": "+971529990017"
-            },
-            "skills": ["DevOps", "Terraform", "Ansible", "AWS"],
-            "courses": [
-                {"name": "Infrastructure as Code", "grade": 95}
-            ],
-            "projects": [
-                {"name": "Multi-Region Cloud Setup", "technologies": ["Terraform", "AWS"]}
-            ]
-        },
-        {
-            "student_id": 118,
-            "contact": {
-                "phone": "+967775678901"
-            },
-            "address": {
-                "street": "Siwon Main Road",
-                "city": "Hadramout",
-                "country": "Yemen"
-            },
-            "guardian": {
-                "name": "Awad Badr",
-                "relationship": "Father",
-                "phone": "+967770000018"
-            },
-            "skills": ["Machine Learning", "NLP", "HuggingFace", "Python"],
-            "courses": [
-                {"name": "Arabic Natural Language Processing", "grade": 94}
-            ],
-            "projects": [
-                {"name": "Arabic Sentiment Classifier", "technologies": ["BERT", "PyTorch"]}
-            ]
-        },
-        {
-            "student_id": 119,
-            "contact": {
-                "phone": "+966508889900"
-            },
-            "address": {
-                "street": "Al-Amir Sultan St",
-                "city": "Madinah",
-                "country": "Saudi Arabia"
-            },
-            "guardian": {
-                "name": "Bilal Hamza",
-                "relationship": "Father",
-                "phone": "+966509990019"
-            },
-            "skills": ["C#", "Unity", "Game Development"],
-            "courses": [
-                {"name": "3D Physics & Shaders", "grade": 87}
-            ],
-            "projects": [
-                {"name": "Educational Math Game", "technologies": ["Unity", "C#"]}
-            ]
-        },
-        {
-            "student_id": 120,
-            "contact": {
-                "phone": "+201277778899"
-            },
-            "address": {
-                "street": "Port Said St",
-                "city": "Ismailia",
-                "country": "Egypt"
-            },
-            "guardian": {
-                "name": "Osama Farouk",
-                "relationship": "Father",
-                "phone": "+201299990020"
-            },
-            "skills": ["Rust", "Systems Programming", "WebAssembly"],
-            "courses": [
-                {"name": "Operating Systems Internals", "grade": 96}
-            ],
-            "projects": [
-                {"name": "Custom In-Memory Cache", "technologies": ["Rust"]}
-            ]
-        },
-        {
-            "student_id": 121,
-            # Student with empty skills list and no guardian
-            "contact": {
-                "phone": "+967776789012"
-            },
-            "address": {
-                "street": "Al-Qasr",
-                "city": "Sanaa",
-                "country": "Yemen"
-            },
-            "skills": [],
-            "courses": [],
-            "projects": []
-        },
-        {
-            # Edge case document: Missing student_id to verify data quality isolation!
-            "contact": {
-                "phone": "+967779998877"
-            },
-            "address": {
-                "street": "Unknown Alley",
-                "city": "Sanaa",
-                "country": "Yemen"
-            },
-            "skills": ["Testing", "Quality Assurance"],
-            "courses": [],
-            "projects": []
-        }
     ]
 
 

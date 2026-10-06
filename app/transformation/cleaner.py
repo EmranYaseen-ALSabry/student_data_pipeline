@@ -26,7 +26,8 @@ def clean_student_data(df: pd.DataFrame) -> pd.DataFrame:
     """Cleans raw student data:
 
     1. Normalizes column names (snake_case, stripped).
-    2. Strips surrounding and repeated whitespace across all string columns.
+    2. Strips surrounding and repeated whitespace from string values without
+       converting structured values such as MongoDB arrays into strings.
     3. Standardizes city casing and common spelling variants.
     4. Normalizes student names (title case, single spaces).
     5. Deduplicates identical records.
@@ -49,20 +50,19 @@ def clean_student_data(df: pd.DataFrame) -> pd.DataFrame:
         cleaned.columns.astype(str)
         .str.strip()
         .str.lower()
-        .str.replace(" ", "_")
+        .str.replace(r"\s+", "_", regex=True)
         .str.replace("-", "_")
     )
 
     # 2. Strip whitespace from string/object columns
     str_cols = cleaned.select_dtypes(include=["object", "string"]).columns
     for col in str_cols:
-        cleaned[col] = cleaned[col].astype(str).str.strip()
-        # Convert 'nan' or 'None' strings back to actual NaN
-        cleaned.loc[cleaned[col].isin(["nan", "None", ""]), col] = pd.NA
+        cleaned[col] = cleaned[col].map(_clean_text_value)
 
     # 3. Standardize City Column
-    if "city" in cleaned.columns:
-        cleaned["city"] = cleaned["city"].apply(_normalize_city)
+    for city_column in ("city", "address.city"):
+        if city_column in cleaned.columns:
+            cleaned[city_column] = cleaned[city_column].apply(_normalize_city)
 
     # 4. Standardize Name Column
     if "name" in cleaned.columns:
@@ -70,13 +70,28 @@ def clean_student_data(df: pd.DataFrame) -> pd.DataFrame:
 
     # 5. Remove exact duplicate rows
     initial_count = len(cleaned)
-    cleaned = cleaned.drop_duplicates()
+    row_signatures = cleaned.apply(
+        lambda row: tuple(repr(value) for value in row),
+        axis=1,
+    )
+    cleaned = cleaned.loc[~row_signatures.duplicated()].copy()
     duplicates_removed = initial_count - len(cleaned)
     if duplicates_removed > 0:
         logger.info(f"Removed {duplicates_removed} duplicate records.")
 
     logger.info(f"Cleaning complete. Output record count: {len(cleaned)}.")
     return cleaned
+
+
+def _clean_text_value(value: Any) -> Any:
+    """Normalize strings while preserving nulls and non-string values."""
+    if not isinstance(value, str):
+        return value
+
+    normalized = " ".join(value.split())
+    if normalized.lower() in {"", "nan", "none", "<na>"}:
+        return pd.NA
+    return normalized
 
 
 def _normalize_city(val: Any) -> Any:

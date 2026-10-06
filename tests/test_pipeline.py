@@ -3,8 +3,11 @@ import pytest
 import pandas as pd
 import mongomock
 
+import main as pipeline_main
+
 from app.sources.csv_source import load_csv_source
 from app.sources.database_source import load_database_source
+from app.sources import api_source
 from app.sources.api_source import fetch_api_source, get_mock_attendance_data
 from app.sources.mongodb_source import load_mongodb_source
 from app.transformation.cleaner import clean_student_data, _normalize_city
@@ -17,7 +20,7 @@ from app.transformation.transformer import (
     _serialize_projects,
 )
 from app.transformation.integration import integrate_sources
-from app.validation.quality import validate_student_records
+from app.validation.quality import validate_source_records, validate_student_records
 
 
 @pytest.fixture
@@ -64,6 +67,32 @@ def test_api_extraction_fallback_and_error_handling():
     assert isinstance(df_fallback, pd.DataFrame)
     assert not df_fallback.empty
     assert "attendance_rate" in df_fallback.columns
+
+
+def test_api_extraction_parses_successful_json(monkeypatch):
+    """Verifies a successful API response is parsed without using fallback data."""
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_value, traceback):
+            return False
+
+        def getcode(self):
+            return 200
+
+        def read(self):
+            return b'{"data": [{"student_id": 101, "attendance_rate": 92.5}]}'
+
+    monkeypatch.setattr(
+        api_source.urllib.request,
+        "urlopen",
+        lambda request, timeout: FakeResponse(),
+    )
+    result = fetch_api_source("https://example.test/attendance")
+    assert result.to_dict("records") == [
+        {"student_id": 101, "attendance_rate": 92.5}
+    ]
 
 
 def test_mongodb_extraction_with_mock():
@@ -129,6 +158,19 @@ def test_text_and_city_normalization():
     assert len(cleaned) == 1
     assert cleaned.iloc[0]["city"] == "Cairo"
     assert cleaned.iloc[0]["name"] == "Ahmed Ali"
+
+
+def test_cleaner_normalizes_each_source_without_stringifying_arrays():
+    """Cleaning standardizes values while preserving MongoDB list fields."""
+    raw = pd.DataFrame({
+        " Student ID ": [101],
+        " Address.City ": ["  sanaa   city "],
+        "skills": [["Python", "SQL"]],
+    })
+    cleaned = clean_student_data(raw)
+    assert cleaned.loc[0, "student_id"] == 101
+    assert cleaned.loc[0, "address.city"] == "Sanaa City"
+    assert cleaned.loc[0, "skills"] == ["Python", "SQL"]
 
 
 # ==========================================
@@ -213,9 +255,43 @@ def test_integrate_four_sources():
     assert row["contact.phone"] == "+96777112233"
 
 
+def test_integration_rejects_sources_without_unique_valid_keys():
+    """Integration fails explicitly instead of silently concatenating bad sources."""
+    with pytest.raises(ValueError, match="missing required join key"):
+        integrate_sources([pd.DataFrame([{"name": "No key"}])])
+
+    duplicate_ids = pd.DataFrame({"student_id": [101, 101]})
+    with pytest.raises(ValueError, match="duplicate 'student_id'"):
+        integrate_sources([duplicate_ids])
+
+
 # ==========================================
 # 5. Data Quality Validation & Error Isolation Tests
 # ==========================================
+
+def test_source_validation_rejects_bad_keys_and_present_invalid_values():
+    """Invalid rows are isolated per source before integration."""
+    source = pd.DataFrame([
+        {"student_id": 101, "age": 21},
+        {"student_id": 102, "age": 22},
+        {"student_id": 102, "age": 23},
+        {"student_id": 103, "age": 15},
+        {"student_id": None, "age": 20},
+        {"student_id": 104, "gpa": "not-a-number"},
+        {"student_id": 105, "score": 101},
+    ])
+    valid, rejected = validate_source_records(source, "CSV")
+    assert valid["student_id"].tolist() == [101]
+    assert len(rejected) == 6
+    assert rejected["source_name"].eq("CSV").all()
+    assert rejected["rejection_stage"].eq("source_validation").all()
+    reasons = " | ".join(rejected["error_reason"].tolist())
+    assert "Duplicate student_id (102)" in reasons
+    assert "Age out of bounds [16-80]" in reasons
+    assert "Missing student_id" in reasons
+    assert "Non-numeric GPA value" in reasons
+    assert "Score out of bounds [0-100]" in reasons
+
 
 def test_quality_validation_strict_rules():
     """Tests strict validation of Age, GPA, Attendance, and student_id."""
@@ -238,7 +314,7 @@ def test_quality_validation_strict_rules():
 
     valid_df, rejected_df = validate_student_records(test_records)
 
-    # Valid records checks: Students 101 and 106 must pass!
+    # Valid records checks: Students 101 and 106 have all required fields.
     assert len(valid_df) == 2
     valid_ids = valid_df["student_id"].tolist()
     assert 101 in valid_ids
@@ -255,3 +331,103 @@ def test_quality_validation_strict_rules():
     assert "GPA out of bounds" in rejected_reasons
     assert "Attendance rate out of bounds" in rejected_reasons
     assert "Missing student_id" in rejected_reasons
+
+
+def test_final_validation_rejects_missing_required_fields():
+    """Required analytics fields are rejected rather than statistically imputed."""
+    records = pd.DataFrame([
+        {"student_id": 201, "age": 20, "gpa": 3.2, "attendance_rate": 90},
+        {"student_id": 202, "age": 21, "gpa": None, "attendance_rate": 85},
+        {"student_id": 203, "age": 22, "gpa": 3.0, "attendance_rate": None},
+    ])
+    valid, rejected = validate_student_records(records)
+    assert valid["student_id"].tolist() == [201]
+    assert len(rejected) == 2
+    reasons = " | ".join(rejected["error_reason"].tolist())
+    assert "Missing required field: gpa" in reasons
+    assert "Missing required field: attendance_rate" in reasons
+
+
+def test_pipeline_runs_all_layers_and_writes_auditable_outputs(tmp_path, monkeypatch):
+    """Exercises cleaning, source gates, integration, final gates, and CSV load."""
+    monkeypatch.setattr(pipeline_main, "project_root", tmp_path)
+    monkeypatch.setattr(
+        pipeline_main,
+        "load_csv_source",
+        lambda path: pd.DataFrame([
+            {
+                "student_id": 101,
+                "name": " alice   smith ",
+                "age": 21,
+                "city": " cairo ",
+                "email": "ALICE@example.com",
+            },
+            {
+                "student_id": 102,
+                "name": "Bob Jones",
+                "age": 22,
+                "city": "Giza",
+                "email": "bob@example.com",
+            },
+        ]),
+    )
+    monkeypatch.setattr(
+        pipeline_main,
+        "load_database_source",
+        lambda path: pd.DataFrame([
+            {
+                "student_id": 101,
+                "major": "Computer Science",
+                "enrollment_year": 2022,
+                "gpa": 3.5,
+                "total_credits": 90,
+            },
+            {
+                "student_id": 102,
+                "major": "Mathematics",
+                "enrollment_year": 2021,
+                "gpa": 4.8,
+                "total_credits": 80,
+            },
+        ]),
+    )
+    monkeypatch.setattr(
+        pipeline_main,
+        "fetch_api_source",
+        lambda endpoint_url: pd.DataFrame([
+            {"student_id": 101, "attendance_rate": 90.0},
+            {"student_id": 102, "attendance_rate": 88.0},
+        ]),
+    )
+    monkeypatch.setattr(
+        pipeline_main,
+        "load_mongodb_source",
+        lambda: pd.json_normalize([
+            {
+                "student_id": 101,
+                "contact": {"phone": "+967770000001"},
+                "address": {"city": " CAIRO "},
+                "skills": ["Python", "SQL"],
+            },
+            {
+                "student_id": 102,
+                "address": {"city": "GIZA"},
+                "skills": ["Math"],
+            },
+        ]),
+    )
+
+    pipeline_main.run_pipeline()
+
+    accepted = pd.read_csv(tmp_path / "data" / "processed" / "final_dataset.csv")
+    rejected = pd.read_csv(tmp_path / "data" / "rejected" / "rejected_records.csv")
+    assert accepted["student_id"].tolist() == [101]
+    assert accepted.loc[0, "address.city"] == "Cairo"
+    assert accepted.loc[0, "skills"] == "Python | SQL"
+    assert {"source_name", "rejection_stage", "error_reason"}.issubset(
+        rejected.columns
+    )
+    assert set(rejected["rejection_stage"]) == {
+        "source_validation",
+        "final_validation",
+    }

@@ -1,144 +1,210 @@
+import math
 from typing import List, Tuple
+
 import pandas as pd
+
 from app.utils.logger import setup_logger
 
 logger = setup_logger("quality_validator")
 
+NUMERIC_BOUNDS = {
+    "age": (16.0, 80.0),
+    "gpa": (0.0, 4.0),
+    "attendance_rate": (0.0, 100.0),
+    "score": (0.0, 100.0),
+}
+INTEGER_FIELDS = {"age", "enrollment_year", "total_credits"}
+REQUIRED_FINAL_FIELDS = ("age", "gpa", "attendance_rate")
+FIELD_LABELS = {
+    "age": "Age",
+    "gpa": "GPA",
+    "attendance_rate": "Attendance rate",
+    "score": "Score",
+}
 
-def validate_student_records(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """Enforces strict data quality and governance gates on integrated student records:
 
-    ========================================================================
-    ARCHITECTURAL POLICY: CRITICAL FIELDS VS. OPTIONAL ADDITIONAL FIELDS
-    ========================================================================
-    1. Critical Core Fields (MANDATORY & STRICT):
-       Violations in these rules immediately isolate the candidate record into
-       the rejected dataset (`rejected_records.csv`) with explicit `error_reason`.
-       - student_id: Must not be null/empty, must be a positive integer, must be unique.
-       - age: If present, must be within academic bounds: 16 <= age <= 80.
-       - gpa: If present, must be within valid grading scale: 0.0 <= gpa <= 4.0.
-       - attendance_rate: If present, must be a valid percentage: 0.0 <= attendance_rate <= 100.0.
-       - score: If present, must be within valid bounds: 0.0 <= score <= 100.0.
-       - email: If present, must contain '@' and domain dot.
-
-    2. Optional Additional Fields (MONGODB & EXTENDED PROFILES):
-       Absence or partial completion of these fields NEVER causes record rejection:
-       - contact.phone, contact.emergency_contact
-       - address.street, address.city, address.country
-       - guardian.name, guardian.relationship, guardian.phone
-       - skills, courses, projects
-       Missing values in these optional fields are preserved as 'N/A' or empty.
-
-    Args:
-        df: Consolidated student DataFrame after transformation.
-
-    Returns:
-        Tuple[pd.DataFrame, pd.DataFrame]: (valid_records, rejected_records)
-    """
+def validate_source_records(
+    df: pd.DataFrame,
+    source_name: str,
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """Validate source-level keys and any quality fields provided by that source."""
     if df.empty:
-        logger.warning("Empty DataFrame passed to quality validator.")
-        return df, pd.DataFrame()
+        logger.warning("Empty DataFrame passed to source validator for %s.", source_name)
+        return df.copy(), pd.DataFrame()
 
-    logger.info(f"Executing data quality validation checks on {len(df)} candidate records...")
-    df_copy = df.copy()
-    reasons_list: List[str | None] = []
-
-    # Check for duplicate student_ids among non-null candidate rows
-    duplicated_ids = set()
-    if "student_id" in df_copy.columns:
-        valid_ids = df_copy["student_id"].dropna()
-        duplicated_ids = set(valid_ids[valid_ids.duplicated()].tolist())
-
-    for idx, row in df_copy.iterrows():
-        errors = []
-
-        # -------------------------------------------------------------
-        # Critical Rule 1: student_id validation (Must be non-null, > 0, unique)
-        # -------------------------------------------------------------
-        if "student_id" not in row or pd.isna(row["student_id"]):
-            errors.append("Missing student_id")
-        else:
-            try:
-                sid = int(row["student_id"])
-                if sid <= 0:
-                    errors.append("Invalid student_id: must be positive integer")
-                elif sid in duplicated_ids:
-                    errors.append(f"Duplicate student_id ({sid})")
-            except (ValueError, TypeError):
-                errors.append("Non-integer student_id")
-
-        # -------------------------------------------------------------
-        # Critical Rule 2: Age boundary validation (16 <= age <= 80)
-        # -------------------------------------------------------------
-        if "age" in row and pd.notna(row["age"]):
-            try:
-                age_val = float(row["age"])
-                if age_val < 16 or age_val > 80:
-                    errors.append(f"Age out of bounds [16-80]: {age_val}")
-            except (ValueError, TypeError):
-                errors.append("Non-numeric age value")
-
-        # -------------------------------------------------------------
-        # Critical Rule 3: GPA boundary validation (0.0 <= gpa <= 4.0)
-        # -------------------------------------------------------------
-        if "gpa" in row and pd.notna(row["gpa"]):
-            try:
-                gpa_val = float(row["gpa"])
-                if gpa_val < 0.0 or gpa_val > 4.0:
-                    errors.append(f"GPA out of bounds [0.0-4.0]: {gpa_val}")
-            except (ValueError, TypeError):
-                errors.append("Non-numeric GPA value")
-
-        # -------------------------------------------------------------
-        # Critical Rule 4: Attendance rate boundary (0.0 <= rate <= 100.0)
-        # -------------------------------------------------------------
-        if "attendance_rate" in row and pd.notna(row["attendance_rate"]):
-            try:
-                att_val = float(row["attendance_rate"])
-                if att_val < 0.0 or att_val > 100.0:
-                    errors.append(f"Attendance rate out of bounds [0-100]: {att_val}")
-            except (ValueError, TypeError):
-                errors.append("Non-numeric attendance rate")
-
-        # -------------------------------------------------------------
-        # Critical Rule 5: Score boundary validation (0.0 <= score <= 100.0)
-        # -------------------------------------------------------------
-        if "score" in row and pd.notna(row["score"]):
-            try:
-                score_val = float(row["score"])
-                if score_val < 0.0 or score_val > 100.0:
-                    errors.append(f"Score out of bounds [0-100]: {score_val}")
-            except (ValueError, TypeError):
-                errors.append("Non-numeric score")
-
-        # -------------------------------------------------------------
-        # Critical Rule 6: Email syntax check if present
-        # -------------------------------------------------------------
-        if "email" in row and pd.notna(row["email"]):
-            email_str = str(row["email"]).strip()
-            if "@" not in email_str or "." not in email_str.split("@")[-1]:
-                errors.append(f"Invalid email format: '{email_str}'")
-
-        # -------------------------------------------------------------
-        # Optional MongoDB Fields: Checked for awareness, non-blocking
-        # -------------------------------------------------------------
-        # Missing contact, guardian, skills, or projects NEVER generates rejection errors.
-
-        if errors:
-            reasons_list.append("; ".join(errors))
-        else:
-            reasons_list.append(None)
-
-    df_copy["error_reason"] = reasons_list
-
-    # Segregate valid from rejected records
-    rejected_mask = df_copy["error_reason"].notna()
-    rejected_records = df_copy[rejected_mask].copy()
-    valid_records = df_copy[~rejected_mask].drop(columns=["error_reason"]).copy()
-
+    df = df.reset_index(drop=True)
     logger.info(
-        f"Validation complete: {len(valid_records)} records PASSED quality gates, "
-        f"{len(rejected_records)} records REJECTED."
+        "Validating %s source records from %s before integration...",
+        len(df),
+        source_name,
+    )
+    numeric_ids = (
+        pd.to_numeric(df["student_id"], errors="coerce")
+        if "student_id" in df.columns
+        else pd.Series(float("nan"), index=df.index)
+    )
+    integral_positive_ids = numeric_ids.map(
+        lambda value: pd.notna(value)
+        and math.isfinite(float(value))
+        and float(value).is_integer()
+        and value > 0
+    )
+    duplicate_ids = set(
+        numeric_ids[integral_positive_ids][
+            numeric_ids[integral_positive_ids].duplicated(keep=False)
+        ].tolist()
     )
 
-    return valid_records, rejected_records
+    errors_by_index: dict[object, str] = {}
+    for index, row in df.iterrows():
+        errors: List[str] = []
+        _validate_student_id(row.get("student_id"), duplicate_ids, errors)
+        _validate_present_fields(row, errors)
+        if errors:
+            errors_by_index[index] = "; ".join(errors)
+
+    rejected_mask = pd.Series(df.index.isin(errors_by_index), index=df.index)
+    rejected = df.loc[rejected_mask].copy()
+    if not rejected.empty:
+        rejected["source_name"] = source_name
+        rejected["rejection_stage"] = "source_validation"
+        rejected["error_reason"] = [
+            errors_by_index[index] for index in rejected.index
+        ]
+
+    valid = df.loc[~rejected_mask].copy()
+    if "student_id" in valid.columns:
+        valid["student_id"] = pd.to_numeric(
+            valid["student_id"], errors="raise"
+        ).astype("Int64")
+
+    logger.info(
+        "%s source validation complete: %s valid, %s rejected.",
+        source_name,
+        len(valid),
+        len(rejected),
+    )
+    return valid, rejected
+
+
+def validate_student_records(
+    df: pd.DataFrame,
+    source_name: str = "integrated",
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """Apply final quality gates and reject incomplete analytical records.
+
+    The selected missing-value policy is conservative: student_id, age, GPA,
+    and attendance are required for the final dataset. Optional profile fields
+    remain missing rather than being filled with invented values.
+    """
+    if df.empty:
+        logger.warning("Empty DataFrame passed to final quality validator.")
+        return df.copy(), pd.DataFrame()
+
+    df = df.reset_index(drop=True)
+    logger.info("Executing final quality checks on %s records...", len(df))
+    duplicated_ids = set()
+    if "student_id" in df.columns:
+        numeric_ids = pd.to_numeric(df["student_id"], errors="coerce")
+        duplicated_ids = set(
+            numeric_ids[numeric_ids.duplicated(keep=False)].dropna().tolist()
+        )
+
+    errors_by_index: dict[object, str] = {}
+    for index, row in df.iterrows():
+        errors: List[str] = []
+
+        for field in REQUIRED_FINAL_FIELDS:
+            if _is_missing(row.get(field)):
+                errors.append(f"Missing required field: {field}")
+
+        _validate_student_id(row.get("student_id"), duplicated_ids, errors)
+        _validate_present_fields(row, errors)
+        if errors:
+            errors_by_index[index] = "; ".join(errors)
+
+    rejected_mask = pd.Series(df.index.isin(errors_by_index), index=df.index)
+    rejected = df.loc[rejected_mask].copy()
+    if not rejected.empty:
+        rejected["source_name"] = source_name
+        rejected["rejection_stage"] = "final_validation"
+        rejected["error_reason"] = [
+            errors_by_index[index] for index in rejected.index
+        ]
+
+    valid = df.loc[~rejected_mask].copy()
+    logger.info(
+        "Final validation complete: %s valid, %s rejected.",
+        len(valid),
+        len(rejected),
+    )
+    return valid, rejected
+
+
+def _validate_student_id(
+    value: object,
+    duplicate_ids: set[object],
+    errors: List[str],
+) -> None:
+    if _is_missing(value):
+        errors.append("Missing student_id")
+        return
+
+    numeric_value = _as_finite_number(value)
+    if numeric_value is None or not numeric_value.is_integer():
+        errors.append("Non-integer student_id")
+    elif numeric_value <= 0:
+        errors.append("Invalid student_id: must be positive integer")
+    elif numeric_value in duplicate_ids:
+        errors.append(f"Duplicate student_id ({int(numeric_value)})")
+
+
+def _validate_present_fields(row: pd.Series, errors: List[str]) -> None:
+    for field, (minimum, maximum) in NUMERIC_BOUNDS.items():
+        value = row.get(field)
+        if field not in row.index or _is_missing(value):
+            continue
+
+        numeric_value = _as_finite_number(value)
+        if numeric_value is None:
+            errors.append(f"Non-numeric {FIELD_LABELS[field]} value")
+        elif numeric_value < minimum or numeric_value > maximum:
+            label = FIELD_LABELS[field]
+            errors.append(
+                f"{label} out of bounds [{minimum:g}-{maximum:g}]: {numeric_value:g}"
+            )
+        elif field in INTEGER_FIELDS and not numeric_value.is_integer():
+            errors.append(f"Non-integer {field} value")
+
+    for field in ("enrollment_year", "total_credits"):
+        value = row.get(field)
+        if field not in row.index or _is_missing(value):
+            continue
+        numeric_value = _as_finite_number(value)
+        if numeric_value is None:
+            errors.append(f"Non-numeric {field} value")
+        elif not numeric_value.is_integer():
+            errors.append(f"Non-integer {field} value")
+
+    email = row.get("email")
+    if not _is_missing(email):
+        email_value = str(email).strip()
+        if "@" not in email_value or "." not in email_value.rsplit("@", 1)[-1]:
+            errors.append(f"Invalid email format: '{email_value}'")
+
+
+def _as_finite_number(value: object) -> float | None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+def _is_missing(value: object) -> bool:
+    if value is None or value is pd.NA:
+        return True
+    try:
+        return bool(pd.isna(value))
+    except (TypeError, ValueError):
+        return False
